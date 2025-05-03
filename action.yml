@@ -27,19 +27,21 @@ runs:
         private-key: ${{ inputs.private-key }}
     - name: Increment version
       run: |
-        RESPONSE=$(curl -s -f \
+        STATUS_FILE=$(mktemp)
+        curl -s -f \
           -H "Authorization: Bearer $APP_TOKEN" \
           -H "Accept: application/vnd.github+json" \
           -H "X-GitHub-Api-Version: 2022-11-28" \
-          https://api.github.com/repos/${{ github.repository }}/actions/variables/${{ inputs.current-version-variable }})
-        HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
-        RESPONSE_BODY=$(echo "$RESPONSE" | sed '$d')
+          https://api.github.com/repos/${{ github.repository }}/actions/variables/${{ inputs.current-version-variable }} \
+          -w "%{http_code}" > $STATUS_FILE | jq -r '.value' > current_version.txt
+        HTTP_STATUS=$(cat $STATUS_FILE)
+        rm $STATUS_FILE
         echo "HTTP Status: $HTTP_STATUS"
-        echo "Response: $RESPONSE_BODY"
         if [ "$HTTP_STATUS" -ne 200 ]; then
           echo "ERROR: Failed to fetch variable ${{ inputs.current-version-variable }} (HTTP $HTTP_STATUS)"
           exit 1
         fi
+        CURRENT_VERSION=$(cat current_version.txt)
         echo $CURRENT_VERSION
         if [ -z "$CURRENT_VERSION" ]; then
           echo "ERROR: ${{ inputs.current-version-variable }} repository variable is not set"
