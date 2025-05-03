@@ -10,4 +10,5 @@ outputs:
     description: "Greet hour"
 runs:
   using: "node20"
+  pre: npm install
   main: "index.js"
