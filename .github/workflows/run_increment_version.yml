@@ -10,5 +10,5 @@ jobs:
       - uses: ./
         with:
           who-to-greet: "A Piraz!!!"
-      - run: echo "Greet time at ${{ steps.test.outpus.time }}"
+      - run: echo "Greet time at ${{ steps.test.outputs.time }}"
         id: test
