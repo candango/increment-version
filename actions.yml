@@ -1,0 +1,13 @@
+name: "Increment Version"
+description: "An action that controls version increment for CI's"
+inputs:
+  who-to-greet:
+    description: "Who to greet"
+    required: true
+    default: "World"
+outputs:
+  time:
+    description: "Greet hour"
+runs:
+  using: "node20"
+  main: "index.js"

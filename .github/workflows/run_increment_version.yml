@@ -1,0 +1,12 @@
+name: Test increment version
+on: [push]
+jobs:
+  test:
+    runs-on: ubunt-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          who-to-greet: "A Piraz!!!"
+      - run: echo "Greet time at ${{ steps.test.outpus.time }}"
+        id: test
