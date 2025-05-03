@@ -4,7 +4,7 @@ inputs:
   app-id:
     description: "GitHub App ID used to generate the token"
     required: true
-  app-private-key:
+  private-key:
     description: "GitHub App private key"
     required: true
   current-version-variable:
@@ -24,7 +24,7 @@ runs:
       uses: actions/create-github-app-token@v2
       with:
         app-id: ${{ inputs.app-id }}
-        app-private-key: ${{ inputs.app-private-key }}
+        private-key: ${{ inputs.private-key }}
     - name: Increment version
       run: |
         CURRENT_VERSION_VAR="${{ inputs.current-version-variable }}"
