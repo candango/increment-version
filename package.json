@@ -1,0 +1,16 @@
+{
+  "name": "increment-version",
+  "version": "0.0.1",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["github", "actions", "version", "ci"],
+  "author": "Flavio Garcia",
+  "license": "MIT",
+  "description": "Github Action that controls version increment",
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.0"
+  }
+}
