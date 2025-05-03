@@ -2,7 +2,7 @@ name: Test increment version
 on: [push]
 jobs:
   test:
-    runs-on: ubunt-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./
