@@ -15,10 +15,7 @@ async function run(): Promise<void> {
             auth: {appId, privateKey}
         });
 
-        // const installation = await octokit.apps.getAuthenticated();
-        // const { data: installationToken } =  await octokit.apps.createInstallationAccessToken({
-        //     installation_id: (installation.data?.id) as number
-        // });
+        const installation = await octokit.apps.getAuthenticated();
 
         // If we need to use the token directly, we can do using this method
         // const appToken: string = installationToken.token;
@@ -30,10 +27,21 @@ async function run(): Promise<void> {
         // });
         const owner: string =  process.env.GITHUB_REPOSITORY!.split("/")[0];
         const repo: string =  process.env.GITHUB_REPOSITORY!.split("/")[1];
+        const { data: installationToken } =  await octokit.apps.getRepoInstallation({
+            owner,
+            repo
+        });
+        const installationId: number = (installation.data?.id) as number;
+        const installationOctokit = new Octokit({
+            authStrategy: createAppAuth,
+            auth: { appId, privateKey, installationId }
+        });
+
+
         core.setOutput("owner", owner);
         core.setOutput("repo", repo);
         const currentVersionVar: string = core.getInput("current-version-variable");
-        const { data: repoVar } = await octokit.request("GET /repos/{owner}/{repo}/actions/variables/{name}", {
+        const { data: repoVar } = await installationOctokit.request("GET /repos/{owner}/{repo}/actions/variables/{name}", {
             owner: owner,
             repo: repo,
             name: currentVersionVar
@@ -44,7 +52,7 @@ async function run(): Promise<void> {
         patch += 1;
         const newVersion: string = `${major}.${minor}.${patch}`;
 
-        await octokit.request("PATCH /repos/{owner}/{repo}/actions/variables/{name}", {
+        await installationOctokit.request("PATCH /repos/{owner}/{repo}/actions/variables/{name}", {
             owner: owner,
             repo: repo,
             name: currentVersionVar,
