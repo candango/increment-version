@@ -1,3 +1,3 @@
 export const entryPoints =  [
-    { out: "index", in: "index.js" },
+    { out: "index", in: "index.ts" },
 ];

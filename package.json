@@ -1,7 +1,7 @@
 {
-    "name": "increment-version",
+    "name": "candango-increment-version",
     "version": "0.0.1",
-    "main": "index.js",
+    "main": "index.ts",
     "scripts": {
         "esbuild": "node build.mjs",
         "build": "npm run build:clean && npm run esbuild",
@@ -22,10 +22,15 @@
     "description": "Github Action that controls version increment",
     "dependencies": {
         "@actions/core": "1.11.1",
-        "@actions/github": "6.0.0"
+        "@actions/exec": "1.1.1",
+        "@octokit/auth-app": "7.2.1",
+        "@octokit/rest": "21.1.1"
     },
     "devDependencies": {
-        "esbuild": "0.25.3"
+        "@octokit/types": "14.0.0",
+        "@types/node": "22.14.0",
+        "esbuild": "0.25.3",
+        "typescript": "5.8.3"
     },
     "packageManager": "yarn@4.9.1"
 }
