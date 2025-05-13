@@ -15,13 +15,13 @@ async function run(): Promise<void> {
             auth: {appId, privateKey}
         });
 
-        const installation = await octokit.apps.getAuthenticated();
-        const installationId: number = (installation.data?.id) as number;
-        const { data: installationToken } = await octokit.apps.createInstallationAccessToken({
-            installation_id: installationId
-        });
-        const appToken: string = installationToken.token;
-        const tokenOctokit = new Octokit({ auth: appToken });
+        await octokit.apps.getAuthenticated();
+        // const installationId: number = (installation.data?.id) as number;
+        // const { data: installationToken } = await octokit.apps.createInstallationAccessToken({
+        //     installation_id: installationId
+        // });
+        // const appToken: string = installationToken.token;
+        // const tokenOctokit = new Octokit({ auth: appToken });
 
         const owner: string =  process.env.GITHUB_REPOSITORY!.split("/")[0];
         const repo: string =  process.env.GITHUB_REPOSITORY!.split("/")[1];
@@ -29,7 +29,7 @@ async function run(): Promise<void> {
         core.setOutput("owner", owner);
         core.setOutput("repo", repo);
         const currentVersionVar: string = core.getInput("current-version-variable");
-        const { data: repoVar } = await tokenOctokit.request("GET /repos/{owner}/{repo}/actions/variables/{name}", {
+        const { data: repoVar } = await octokit.request("GET /repos/{owner}/{repo}/actions/variables/{name}", {
             owner: owner,
             repo: repo,
             name: currentVersionVar
@@ -40,7 +40,7 @@ async function run(): Promise<void> {
         patch += 1;
         const newVersion: string = `${major}.${minor}.${patch}`;
 
-        await tokenOctokit.request("PATCH /repos/{owner}/{repo}/actions/variables/{name}", {
+        await octokit.request("PATCH /repos/{owner}/{repo}/actions/variables/{name}", {
             owner: owner,
             repo: repo,
             name: currentVersionVar,
