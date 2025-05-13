@@ -30,6 +30,8 @@ async function run(): Promise<void> {
         // });
         const owner: string =  process.env.GITHUB_REPOSITORY!.split("/")[0];
         const repo: string =  process.env.GITHUB_REPOSITORY!.split("/")[1];
+        core.setOutput("owner", owner);
+        core.setOutput("repo", repo);
         const currentVersionVar: string = core.getInput("current-version-variable");
         const { data: repoVar } = await octokit.request("GET /repos/{owner}/{repo}/actions/variables/{name}", {
             owner: owner,
