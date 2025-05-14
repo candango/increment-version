@@ -17,49 +17,60 @@ async function run(): Promise<void> {
             privateKey: privateKey
         });
 
-        const appAuthentication = await auth({ type: "app" });
-
-        const octokit = new Octokit({
-            auth: appAuthentication.token
-        });
-
-        const owner: string =  process.env.GITHUB_REPOSITORY!.split("/")[0];
-        const repo: string =  process.env.GITHUB_REPOSITORY!.split("/")[1];
-
-        core.setOutput("owner", owner);
-        core.setOutput("repo", repo);
-        const currentVersionVar: string = core.getInput("current-version-variable");
-        const { data: repoVar } = await octokit.request("GET /repos/{owner}/{repo}/actions/variables/{name}", {
-            owner: owner,
-            repo: repo,
-            name: currentVersionVar,
-            headers: {
-                'X-GitHub-Api-Version': '2022-11-28'
-            }
-        });
-
-        let currentVersion: string = repoVar.value;
-        let [major, minor, patch]: number[] = currentVersion.split(".").map(Number);
-        patch += 1;
-        const newVersion: string = `${major}.${minor}.${patch}`;
-
-        await octokit.request("PATCH /repos/{owner}/{repo}/actions/variables/{name}", {
-            owner: owner,
-            repo: repo,
-            name: currentVersionVar,
-            value: newVersion,
-            headers: {
-                'X-GitHub-Api-Version': '2022-11-28'
-            }
-        });
-
-        await octokit.request("DELETE /installation/token", {
-            headers: {
+        try { 
+            const appAuthentication = await auth({ type: "app" });
+            const octokit = new Octokit({
                 auth: appAuthentication.token
-            }
-        });
+            });
 
-        core.setOutput("new-version", newVersion);
+            const owner: string =  process.env.GITHUB_REPOSITORY!.split("/")[0];
+            const repo: string =  process.env.GITHUB_REPOSITORY!.split("/")[1];
+
+            core.setOutput("owner", owner);
+            core.setOutput("repo", repo);
+            const currentVersionVar: string = core.getInput("current-version-variable");
+            try { 
+                const { data: repoVar } = await octokit.request("GET /repos/{owner}/{repo}/actions/variables/{name}", {
+                    owner: owner,
+                    repo: repo,
+                    name: currentVersionVar,
+                    headers: {
+                        'X-GitHub-Api-Version': '2022-11-28'
+                    }
+                });
+
+                let currentVersion: string = repoVar.value;
+                let [major, minor, patch]: number[] = currentVersion.split(".").map(Number);
+                patch += 1;
+                const newVersion: string = `${major}.${minor}.${patch}`;
+
+                try { 
+                    await octokit.request("PATCH /repos/{owner}/{repo}/actions/variables/{name}", {
+                        owner: owner,
+                        repo: repo,
+                        name: currentVersionVar,
+                        value: newVersion,
+                        headers: {
+                            'X-GitHub-Api-Version': '2022-11-28'
+                        }
+                    });
+                } catch(error: any) {
+                    core.warning(`Change repo variable failed: ${error.message}`);
+                }
+
+
+                core.setOutput("new-version", newVersion);
+            } catch(error: any) {
+                core.warning(`Get repo variable failed: ${error.message}`);
+            }
+            await octokit.request("DELETE /installation/token", {
+                headers: {
+                    auth: appAuthentication.token
+                }
+            });
+        } catch(error: any) {
+            core.warning(`Authentication failed: ${error.message}`);
+        }
     } catch (error: any) {
         core.setFailed(`Action failed: ${error.message}`);
     }
