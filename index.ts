@@ -32,7 +32,10 @@ async function run(): Promise<void> {
         const { data: repoVar } = await octokit.request("GET /repos/{owner}/{repo}/actions/variables/{name}", {
             owner: owner,
             repo: repo,
-            name: currentVersionVar
+            name: currentVersionVar,
+            headers: {
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
         });
 
         let currentVersion: string = repoVar.value;
@@ -44,7 +47,10 @@ async function run(): Promise<void> {
             owner: owner,
             repo: repo,
             name: currentVersionVar,
-            value: newVersion
+            value: newVersion,
+            headers: {
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
         });
 
         await octokit.request("DELETE /installation/token", {
