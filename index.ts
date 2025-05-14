@@ -23,7 +23,8 @@ async function run(): Promise<void> {
 
         const appAuthentication = await auth({ type: "app" });
 
-        core.setOutput("authentication", appAuthentication);
+        core.info(appAuthentication.expiresAt);
+        core.info(appAuthentication.token);
         // await octokit.apps.getAuthenticated();
 
         // const installationId: number = (installation.data?.id) as number;
