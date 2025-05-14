@@ -48,7 +48,7 @@ async function run(): Promise<void> {
                     repo: repo,
                     name: currentVersionVar,
                     headers: {
-                        'X-GitHub-Api-Version': '2022-11-28'
+                        "X-GitHub-Api-Version": "2022-11-28"
                     }
                 });
 
@@ -64,7 +64,7 @@ async function run(): Promise<void> {
                         name: currentVersionVar,
                         value: newVersion,
                         headers: {
-                            'X-GitHub-Api-Version': '2022-11-28'
+                            "X-GitHub-Api-Version": "2022-11-28"
                         }
                     });
                 } catch(error: any) {
@@ -78,7 +78,7 @@ async function run(): Promise<void> {
             }
             await octokit.request("DELETE /installation/token", {
                 headers: {
-                    auth: appAuthentication.token
+                    "X-GitHub-Api-Version": "2022-11-28"
                 }
             });
         } catch(error: any) {
