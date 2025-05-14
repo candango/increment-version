@@ -18,13 +18,26 @@ async function run(): Promise<void> {
         });
 
         try { 
-            const appAuthentication = await auth({ type: "app" });
-            const octokit = new Octokit({
-                auth: appAuthentication.token
+            const appOctokit = new Octokit({
+                authStrategy: createAppAuth,
+                auth: {
+                    appId: appId,
+                    privateKey: privateKey
+                }
             });
 
             const owner: string =  process.env.GITHUB_REPOSITORY!.split("/")[0];
             const repo: string =  process.env.GITHUB_REPOSITORY!.split("/")[1];
+            const { data: installation } = await appOctokit.apps.getRepoInstallation({
+                owner,
+                repo
+            });
+
+            const installationId = installation.id;
+            const installationAuth = await auth({ type: "installation", installationId });
+            const octokit = new Octokit({
+                auth: installationAuth.token
+            });
 
             core.setOutput("owner", owner);
             core.setOutput("repo", repo);
