@@ -76,10 +76,18 @@ async function run(): Promise<void> {
                 });
             } catch(error: any) {
                 core.setFailed(`Change repo variable failed: ${error.message}`);
+                return
             }
 
 
             core.setOutput("new-version", newVersion);
+            try {
+                await exec("git", ["tag", `v${newVersion}`]); 
+                await exec("git", ["push", "origin", `v${newVersion}`]); 
+            } catch (error: any) {
+                core.setFailed(`Failed tagging repository head with the new version ${newVersion} : ${error.message}`);
+                return
+            }
         } catch(error: any) {
             core.setFailed(`Get repo variable failed: ${error.message}`);
         }
