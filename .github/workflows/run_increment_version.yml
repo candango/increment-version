@@ -45,6 +45,7 @@ jobs:
           echo "Python Ghost Update Verified via get_version()!"
 
   test-js:
+    needs: test-python # Run sequentially to avoid tag/variable collisions
     runs-on: ubuntu-latest
     if: github.repository == 'candango/increment-version'
     permissions:

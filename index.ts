@@ -11,7 +11,7 @@ class Version {
     prerelease?: { type: string; number: number };
 
     constructor(versionString: string) {
-        // Suporta 0.9.8a1, 0.9.8-a1, 0.9.8-a.1, etc.
+        // Robust regex for PEP 440 (0.9.8a1) and SemVer (0.9.8-a.1 or 0.9.8-a1)
         const match = versionString.match(/^(\d+)\.(\d+)\.(\d+)(?:[-.]([a-z]+)[.-]?(\d+))?$/i) || 
                       versionString.match(/^(\d+)\.(\d+)\.(\d+)(?:([a-z]+)(\d+))?$/i);
         
@@ -204,10 +204,12 @@ async function run(): Promise<void> {
 
             try {
                 core.info(`Creating Git tag: v${newVersionStr}`);
-                await exec("git", ["tag", `v${newVersionStr}`]); 
+                // Use -f to allow overwriting tags (Moving Tag strategy)
+                await exec("git", ["tag", "-f", `v${newVersionStr}`]); 
                 const remoteRepo = `https://x-access-token:${authToken}@github.com/${owner}/${repo}.git`;
                 await exec("git", ["remote", "set-url", "origin", remoteRepo]);
-                await exec("git", ["push", "origin", `v${newVersionStr}`]); 
+                // Use -f to allow forcing the tag update on remote
+                await exec("git", ["push", "-f", "origin", `v${newVersionStr}`]); 
                 core.info("Git push successful.");
             } catch (error: any) {
                 core.setFailed(`Failed tagging repository head: ${error.message}`);
