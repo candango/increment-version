@@ -43,9 +43,18 @@ jobs:
             exit 1
           fi
           echo "Python Ghost Update Verified via get_version()!"
+      - name: Cleanup Python Tag
+        if: always()
+        run: |
+          TAG="v${{ steps.increment.outputs.new-version }}"
+          if [ -n "$TAG" ] && [ "$TAG" != "v" ]; then
+            echo "Cleaning up tag $TAG..."
+            git tag -d "$TAG" || true
+            git push origin --delete "$TAG" || true
+          fi
 
   test-js:
-    needs: test-python # Run sequentially to avoid tag/variable collisions
+    needs: test-python
     runs-on: ubuntu-latest
     if: github.repository == 'candango/increment-version'
     permissions:
@@ -68,3 +77,12 @@ jobs:
           echo "Verifying if $NEW_VERSION is in package.json..."
           cat package.json | grep "$NEW_VERSION"
           echo "JS Ghost Update Verified!"
+      - name: Cleanup JS Tag
+        if: always()
+        run: |
+          TAG="v${{ steps.increment.outputs.new-version }}"
+          if [ -n "$TAG" ] && [ "$TAG" != "v" ]; then
+            echo "Cleaning up tag $TAG..."
+            git tag -d "$TAG" || true
+            git push origin --delete "$TAG" || true
+          fi
