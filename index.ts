@@ -11,7 +11,10 @@ class Version {
     prerelease?: { type: string; number: number };
 
     constructor(versionString: string) {
-        const match = versionString.match(/^(\d+)\.(\d+)\.(\d+)(?:([a-z]+)(\d+))?$/i);
+        // Robust regex for PEP 440 (0.9.8a1) and SemVer (0.9.8-a.1 or 0.9.8-a1)
+        const match = versionString.match(/^(\d+)\.(\d+)\.(\d+)(?:[-.]([a-z]+)[.-]?(\d+))?$/i) || 
+                      versionString.match(/^(\d+)\.(\d+)\.(\d+)(?:([a-z]+)(\d+))?$/i);
+        
         if (!match) {
             throw new Error(`Invalid version format: ${versionString}`);
         }
@@ -60,20 +63,21 @@ class Version {
         }
     }
 
-    toString(): string {
+    format(language: string): string {
         let base = `${this.major}.${this.minor}.${this.patch}`;
-        if (this.prerelease) {
-            base += `${this.prerelease.type}${this.prerelease.number}`;
-        }
-        return base;
-    }
+        if (!this.prerelease) return base;
 
-    toSemVer(): string {
-        let base = `${this.major}.${this.minor}.${this.patch}`;
-        if (this.prerelease) {
-            base += `-${this.prerelease.type}.${this.prerelease.number}`;
+        switch (language.toLowerCase()) {
+            case "javascript":
+            case "typescript":
+                // Standard SemVer: 0.9.8-a1
+                return `${base}-${this.prerelease.type}${this.prerelease.number}`;
+            case "python":
+                // PEP 440: 0.9.8a1
+                return `${base}${this.prerelease.type}${this.prerelease.number}`;
+            default:
+                return `${base}${this.prerelease.type}${this.prerelease.number}`;
         }
-        return base;
     }
 
     toPythonTuple(): string {
@@ -95,10 +99,9 @@ class PythonProvider implements VersionProvider {
 
         let content = fs.readFileSync(target, "utf8");
         content = content.replace(/__version__\s*=\s*\([^)]+\)/, `__version__ = ${newVersion.toPythonTuple()}`);
-        content = content.replace(/version\s*=\s*["'][^"']+["']/, `version = "${newVersion.toString()}"`);
+        content = content.replace(/version\s*=\s*["'][^"']+["']/, `version = "${newVersion.format("python")}"`);
         fs.writeFileSync(target, content);
         core.info(`Updated Python metadata in ${target}`);
-        core.debug(`New content: ${content}`);
     }
 }
 
@@ -108,9 +111,9 @@ class JavaScriptProvider implements VersionProvider {
             core.warning("package.json not found. Skipping file update.");
             return;
         }
-        // npm version requires standard SemVer
-        await exec("npm", ["version", newVersion.toSemVer(), "--no-git-tag-version"]);
-        core.info(`Updated JavaScript metadata in package.json using SemVer: ${newVersion.toSemVer()}`);
+        const versionStr = newVersion.format("javascript");
+        await exec("npm", ["version", versionStr, "--no-git-tag-version"]);
+        core.info(`Updated JavaScript metadata in package.json using SemVer: ${versionStr}`);
     }
 }
 
@@ -175,16 +178,15 @@ async function run(): Promise<void> {
             });
 
             const currentVersion = new Version(repoVar.value);
-            core.info(`Current version is: ${currentVersion.toString()}`);
+            const detectedLang = language === "auto" ? detectLanguage() : language;
+            core.info(`Current version (from variable): ${repoVar.value}`);
+            core.info(`Detected language: ${detectedLang}`);
             
             currentVersion.increment(incrementLevel, isPrerelease, prereleaseType);
-            const newVersionStr = currentVersion.toString();
+            const newVersionStr = currentVersion.format(detectedLang);
             core.info(`New version will be: ${newVersionStr}`);
 
             let provider: VersionProvider;
-            const detectedLang = language === "auto" ? detectLanguage() : language;
-            core.info(`Detected language: ${detectedLang}`);
-
             switch (detectedLang) {
                 case "python": provider = new PythonProvider(); break;
                 case "javascript":
