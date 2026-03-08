@@ -12,7 +12,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Create mock Python version file
         run: |
-          echo '__version__ = (0, 0, 1)' > mock_init.py
+          cat <<EOF > mock_init.py
+          __version__ = (0, 0, 1)
+          
+          def get_version():
+              if isinstance(__version__[-1], str):
+                  return '.'.join(map(str, __version__[:-1])) + __version__[-1]
+              return ".".join(map(str, __version__))
+          EOF
       - name: Run Action (Local - Python)
         id: increment
         uses: ./
@@ -27,12 +34,15 @@ jobs:
         run: |
           echo "Content of mock_init.py:"
           cat mock_init.py
-          # Python uses commas in tuple. We check for core version components.
-          # The variable will have something like 0.0.14a1
-          # The file will have (0, 0, 14, 'a1')
-          grep "0, 0" mock_init.py
-          grep "a1" mock_init.py
-          echo "Python Ghost Update Verified!"
+          EXPECTED_VERSION="${{ steps.increment.outputs.new-version }}"
+          ACTUAL_VERSION=$(python3 -c "import mock_init; print(mock_init.get_version())")
+          echo "Expected: $EXPECTED_VERSION"
+          echo "Actual: $ACTUAL_VERSION"
+          if [ "$EXPECTED_VERSION" != "$ACTUAL_VERSION" ]; then
+            echo "Version mismatch!"
+            exit 1
+          fi
+          echo "Python Ghost Update Verified via get_version()!"
 
   test-js:
     runs-on: ubuntu-latest
@@ -53,8 +63,7 @@ jobs:
           prerelease-type: b
       - name: Verify JS update
         run: |
-          echo "Content of package.json (version part):"
-          cat package.json | grep '"version":'
-          # JS uses SemVer hyphen for pre-release (e.g., -b1)
-          cat package.json | grep "\-b"
+          NEW_VERSION="${{ steps.increment.outputs.new-version }}"
+          echo "Verifying if $NEW_VERSION is in package.json..."
+          cat package.json | grep "$NEW_VERSION"
           echo "JS Ghost Update Verified!"

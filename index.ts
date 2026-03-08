@@ -11,7 +11,7 @@ class Version {
     prerelease?: { type: string; number: number };
 
     constructor(versionString: string) {
-        // Robust regex for PEP 440 (0.9.8a1) and SemVer (0.9.8-a.1 or 0.9.8-a1)
+        // Suporta 0.9.8a1, 0.9.8-a1, 0.9.8-a.1, etc.
         const match = versionString.match(/^(\d+)\.(\d+)\.(\d+)(?:[-.]([a-z]+)[.-]?(\d+))?$/i) || 
                       versionString.match(/^(\d+)\.(\d+)\.(\d+)(?:([a-z]+)(\d+))?$/i);
         
@@ -70,10 +70,8 @@ class Version {
         switch (language.toLowerCase()) {
             case "javascript":
             case "typescript":
-                // Standard SemVer: 0.9.8-a1
                 return `${base}-${this.prerelease.type}${this.prerelease.number}`;
             case "python":
-                // PEP 440: 0.9.8a1
                 return `${base}${this.prerelease.type}${this.prerelease.number}`;
             default:
                 return `${base}${this.prerelease.type}${this.prerelease.number}`;
