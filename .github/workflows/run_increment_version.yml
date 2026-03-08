@@ -1,11 +1,38 @@
 name: Test increment version
 on: [push]
 jobs:
-  test:
+  test-python:
     runs-on: ubuntu-latest
+    if: github.repository == 'candango/increment-version'
     steps:
       - uses: actions/checkout@v4
+      - name: Create mock Python version file
+        run: |
+          echo '__version__ = (0, 0, 1)' > mock_init.py
       - uses: ./
         with:
           app-id: ${{ vars.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          language: python
+          file-path: mock_init.py
+          is-prerelease: true
+          prerelease-type: a
+      - name: Verify Python update
+        run: |
+          grep "__version__ = (0, 0, 2, 'a1')" mock_init.py
+          echo "Python Ghost Update Verified!"
+
+  test-js:
+    runs-on: ubuntu-latest
+    if: github.repository == 'candango/increment-version'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          language: javascript
+          is-prerelease: false
+      - name: Verify JS update
+        run: |
+          cat package.json | grep '"version":'
+          echo "JS Ghost Update Verified!"
