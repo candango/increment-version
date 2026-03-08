@@ -1,12 +1,15 @@
 name: "Candango Increment Version"
 description: "An action that controls version increment for CI's"
 inputs:
+  github-token:
+    description: "GitHub Token (PAT or GITHUB_TOKEN) with write access to contents and variables"
+    required: false
   app-id:
-    description: "GitHub App ID used to generate the token"
-    required: true
+    description: "GitHub App ID (required if github-token is not provided)"
+    required: false
   private-key:
-    description: "GitHub App private key"
-    required: true
+    description: "GitHub App private key (required if github-token is not provided)"
+    required: false
   current-version-variable:
     description: "Current version repository variable name containing the project version"
     required: true

@@ -11,7 +11,6 @@ class Version {
     prerelease?: { type: string; number: number };
 
     constructor(versionString: string) {
-        // Regex for PEP 440 and SemVer pre-releases
         const match = versionString.match(/^(\d+)\.(\d+)\.(\d+)(?:([a-z]+)(\d+))?$/i);
         if (!match) {
             throw new Error(`Invalid version format: ${versionString}`);
@@ -34,12 +33,10 @@ class Version {
                 if (this.prerelease.type === prereleaseType) {
                     this.prerelease.number += 1;
                 } else {
-                    // Transition between prerelease types (e.g., a -> b -> rc)
                     this.prerelease.type = prereleaseType;
                     this.prerelease.number = 1;
                 }
             } else {
-                // New prerelease (e.g., stable -> a)
                 if (level === "major") this.major += 1;
                 else if (level === "minor") this.minor += 1;
                 else this.patch += 1;
@@ -47,7 +44,6 @@ class Version {
             }
         } else {
             if (this.prerelease) {
-                // Moving from prerelease to stable
                 this.prerelease = undefined;
             } else {
                 if (level === "major") {
@@ -90,11 +86,8 @@ class PythonProvider implements VersionProvider {
         }
 
         let content = fs.readFileSync(target, "utf8");
-        // Replace tuple: __version__ = (0, 9, 6)
         content = content.replace(/__version__\s*=\s*\([^)]+\)/, `__version__ = ${newVersion.toPythonTuple()}`);
-        // Replace string: version = "0.9.6"
         content = content.replace(/version\s*=\s*["'][^"']+["']/, `version = "${newVersion.toString()}"`);
-        
         fs.writeFileSync(target, content);
         core.info(`Updated Python metadata in ${target}`);
     }
@@ -124,39 +117,36 @@ async function run(): Promise<void> {
         
         const owner: string =  process.env.GITHUB_REPOSITORY!.split("/")[0];
         const repo: string =  process.env.GITHUB_REPOSITORY!.split("/")[1];
-        const appId: string = core.getInput("app-id", {required: true});
-        const privateKey: string = core.getInput("private-key", {required: true});
 
-        const auth = createAppAuth({
-            appId: appId,
-            privateKey: privateKey
-        });
+        // Auth Logic
+        const githubToken: string = core.getInput("github-token");
+        const appId: string = core.getInput("app-id");
+        const privateKey: string = core.getInput("private-key");
 
-        const appOctokit = new Octokit({
-            authStrategy: createAppAuth,
-            auth: {
-                appId: appId,
-                privateKey: privateKey
-            }
-        });
+        let authToken: string;
 
-        let installationId: number;
-        try {
-            const { data: installation } = await appOctokit.apps.getRepoInstallation({
-                owner,
-                repo
+        if (githubToken) {
+            core.info("Using provided GitHub Token for authentication.");
+            authToken = githubToken;
+            core.setSecret(authToken);
+        } else if (appId && privateKey) {
+            core.info("Using GitHub App for authentication.");
+            const auth = createAppAuth({ appId, privateKey });
+            const appOctokit = new Octokit({
+                authStrategy: createAppAuth,
+                auth: { appId, privateKey }
             });
 
-            installationId = installation.id;
-        } catch (error: any) {
-            core.setFailed(`Get repo installation failed: ${error.message}. Check if the application is installed at repo ${owner}/${repo}`);
-            return
+            const { data: installation } = await appOctokit.apps.getRepoInstallation({ owner, repo });
+            const installationAuth = await auth({ type: "installation", installationId: installation.id });
+            authToken = installationAuth.token;
+            core.setSecret(authToken);
+        } else {
+            core.setFailed("Either 'github-token' or both 'app-id' and 'private-key' must be provided.");
+            return;
         }
 
-        const installationAuth = await auth({ type: "installation", installationId });
-        const octokit = new Octokit({
-            auth: installationAuth.token
-        });
+        const octokit = new Octokit({ auth: authToken });
 
         core.setOutput("owner", owner);
         core.setOutput("repo", repo);
@@ -170,75 +160,53 @@ async function run(): Promise<void> {
 
         try { 
             const { data: repoVar } = await octokit.request("GET /repos/{owner}/{repo}/actions/variables/{name}", {
-                owner: owner,
-                repo: repo,
-                name: currentVersionVar,
-                headers: {
-                    "X-GitHub-Api-Version": "2022-11-28"
-                }
+                owner, repo, name: currentVersionVar,
+                headers: { "X-GitHub-Api-Version": "2022-11-28" }
             });
 
             const currentVersion = new Version(repoVar.value);
             currentVersion.increment(incrementLevel, isPrerelease, prereleaseType);
             const newVersionStr = currentVersion.toString();
 
-            // 1. Update metadata file (Ghost Update)
             let provider: VersionProvider;
             const detectedLang = language === "auto" ? detectLanguage() : language;
-
             switch (detectedLang) {
-                case "python":
-                    provider = new PythonProvider();
-                    break;
+                case "python": provider = new PythonProvider(); break;
                 case "javascript":
-                case "typescript":
-                    provider = new JavaScriptProvider();
-                    break;
-                default:
-                    provider = new GenericProvider();
+                case "typescript": provider = new JavaScriptProvider(); break;
+                default: provider = new GenericProvider();
             }
 
             await provider.updateMetadata(currentVersion, filePath);
 
-            // 2. Update GitHub variable
-            try { 
-                await octokit.request("PATCH /repos/{owner}/{repo}/actions/variables/{name}", {
-                    owner: owner,
-                    repo: repo,
-                    name: currentVersionVar,
-                    value: newVersionStr,
-                    headers: {
-                        "X-GitHub-Api-Version": "2022-11-28"
-                    }
-                });
-            } catch(error: any) {
-                core.setFailed(`Change repo variable failed: ${error.message}`);
-                return
-            }
+            await octokit.request("PATCH /repos/{owner}/{repo}/actions/variables/{name}", {
+                owner, repo, name: currentVersionVar, value: newVersionStr,
+                headers: { "X-GitHub-Api-Version": "2022-11-28" }
+            });
 
             core.setOutput("new-version", newVersionStr);
 
-            // 3. Tag repository
             try {
                 await exec("git", ["tag", `v${newVersionStr}`]); 
+                const remoteRepo = `https://x-access-token:${authToken}@github.com/${owner}/${repo}.git`;
+                await exec("git", ["remote", "set-url", "origin", remoteRepo]);
                 await exec("git", ["push", "origin", `v${newVersionStr}`]); 
             } catch (error: any) {
-                core.setFailed(`Failed tagging repository head with the new version ${newVersionStr} : ${error.message}`);
-                return
+                core.setFailed(`Failed tagging repository head: ${error.message}`);
+                return;
             }
         } catch(error: any) {
             core.setFailed(`Action failed: ${error.message}`);
         }
 
-        // Cleanup
-        try { 
-            await octokit.request("DELETE /installation/token", {
-                headers: {
-                    "X-GitHub-Api-Version": "2022-11-28"
-                }
-            });
-        } catch(error: any) {
-            core.warning(`Failed deleting the installation token: ${error.message}`);
+        if (appId && privateKey) {
+            try { 
+                await octokit.request("DELETE /installation/token", {
+                    headers: { "X-GitHub-Api-Version": "2022-11-28" }
+                });
+            } catch(error: any) {
+                core.warning(`Failed deleting the installation token: ${error.message}`);
+            }
         }
     } catch (error: any) {
         core.setFailed(`Action failed: ${error.message}`);
