@@ -2,7 +2,120 @@ import * as core from "@actions/core";
 import { exec } from "@actions/exec";
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
-// import { resolve } from "path";
+import * as fs from "fs";
+
+class Version {
+    major: number;
+    minor: number;
+    patch: number;
+    prerelease?: { type: string; number: number };
+
+    constructor(versionString: string) {
+        // Regex for PEP 440 and SemVer pre-releases
+        const match = versionString.match(/^(\d+)\.(\d+)\.(\d+)(?:([a-z]+)(\d+))?$/i);
+        if (!match) {
+            throw new Error(`Invalid version format: ${versionString}`);
+        }
+
+        this.major = parseInt(match[1]);
+        this.minor = parseInt(match[2]);
+        this.patch = parseInt(match[3]);
+        if (match[4]) {
+            this.prerelease = {
+                type: match[4].toLowerCase(),
+                number: parseInt(match[5])
+            };
+        }
+    }
+
+    increment(level: string, isPrerelease: boolean, prereleaseType: string): void {
+        if (isPrerelease) {
+            if (this.prerelease) {
+                if (this.prerelease.type === prereleaseType) {
+                    this.prerelease.number += 1;
+                } else {
+                    // Transition between prerelease types (e.g., a -> b -> rc)
+                    this.prerelease.type = prereleaseType;
+                    this.prerelease.number = 1;
+                }
+            } else {
+                // New prerelease (e.g., stable -> a)
+                if (level === "major") this.major += 1;
+                else if (level === "minor") this.minor += 1;
+                else this.patch += 1;
+                this.prerelease = { type: prereleaseType, number: 1 };
+            }
+        } else {
+            if (this.prerelease) {
+                // Moving from prerelease to stable
+                this.prerelease = undefined;
+            } else {
+                if (level === "major") {
+                    this.major += 1;
+                    this.minor = 0;
+                    this.patch = 0;
+                } else if (level === "minor") {
+                    this.minor += 1;
+                    this.patch = 0;
+                } else {
+                    this.patch += 1;
+                }
+            }
+        }
+    }
+
+    toString(): string {
+        let base = `${this.major}.${this.minor}.${this.patch}`;
+        if (this.prerelease) {
+            base += `${this.prerelease.type}${this.prerelease.number}`;
+        }
+        return base;
+    }
+
+    toPythonTuple(): string {
+        return `(${this.major}, ${this.minor}, ${this.patch}${this.prerelease ? `, '${this.prerelease.type}${this.prerelease.number}'` : ""})`;
+    }
+}
+
+interface VersionProvider {
+    updateMetadata(newVersion: Version, filePath?: string): Promise<void>;
+}
+
+class PythonProvider implements VersionProvider {
+    async updateMetadata(newVersion: Version, filePath?: string): Promise<void> {
+        const target = filePath || "__init__.py";
+        if (!fs.existsSync(target)) {
+            core.warning(`Python version file not found: ${target}. Skipping file update.`);
+            return;
+        }
+
+        let content = fs.readFileSync(target, "utf8");
+        // Replace tuple: __version__ = (0, 9, 6)
+        content = content.replace(/__version__\s*=\s*\([^)]+\)/, `__version__ = ${newVersion.toPythonTuple()}`);
+        // Replace string: version = "0.9.6"
+        content = content.replace(/version\s*=\s*["'][^"']+["']/, `version = "${newVersion.toString()}"`);
+        
+        fs.writeFileSync(target, content);
+        core.info(`Updated Python metadata in ${target}`);
+    }
+}
+
+class JavaScriptProvider implements VersionProvider {
+    async updateMetadata(newVersion: Version): Promise<void> {
+        if (!fs.existsSync("package.json")) {
+            core.warning("package.json not found. Skipping file update.");
+            return;
+        }
+        await exec("npm", ["version", newVersion.toString(), "--no-git-tag-version"]);
+        core.info(`Updated JavaScript metadata in package.json`);
+    }
+}
+
+class GenericProvider implements VersionProvider {
+    async updateMetadata(): Promise<void> {
+        core.info("Generic project detected. Skipping file metadata update.");
+    }
+}
 
 async function run(): Promise<void> {
     try {
@@ -49,6 +162,12 @@ async function run(): Promise<void> {
         core.setOutput("repo", repo);
 
         const currentVersionVar: string = core.getInput("current-version-variable");
+        const language: string = core.getInput("language");
+        const filePath: string = core.getInput("file-path");
+        const incrementLevel: string = core.getInput("increment-level");
+        const isPrerelease: boolean = core.getInput("is-prerelease") === "true";
+        const prereleaseType: string = core.getInput("prerelease-type");
+
         try { 
             const { data: repoVar } = await octokit.request("GET /repos/{owner}/{repo}/actions/variables/{name}", {
                 owner: owner,
@@ -59,17 +178,35 @@ async function run(): Promise<void> {
                 }
             });
 
-            let currentVersion: string = repoVar.value;
-            let [major, minor, patch]: number[] = currentVersion.split(".").map(Number);
-            patch += 1;
-            const newVersion: string = `${major}.${minor}.${patch}`;
+            const currentVersion = new Version(repoVar.value);
+            currentVersion.increment(incrementLevel, isPrerelease, prereleaseType);
+            const newVersionStr = currentVersion.toString();
 
+            // 1. Update metadata file (Ghost Update)
+            let provider: VersionProvider;
+            const detectedLang = language === "auto" ? detectLanguage() : language;
+
+            switch (detectedLang) {
+                case "python":
+                    provider = new PythonProvider();
+                    break;
+                case "javascript":
+                case "typescript":
+                    provider = new JavaScriptProvider();
+                    break;
+                default:
+                    provider = new GenericProvider();
+            }
+
+            await provider.updateMetadata(currentVersion, filePath);
+
+            // 2. Update GitHub variable
             try { 
                 await octokit.request("PATCH /repos/{owner}/{repo}/actions/variables/{name}", {
                     owner: owner,
                     repo: repo,
                     name: currentVersionVar,
-                    value: newVersion,
+                    value: newVersionStr,
                     headers: {
                         "X-GitHub-Api-Version": "2022-11-28"
                     }
@@ -79,19 +216,21 @@ async function run(): Promise<void> {
                 return
             }
 
+            core.setOutput("new-version", newVersionStr);
 
-            core.setOutput("new-version", newVersion);
+            // 3. Tag repository
             try {
-                await exec("git", ["tag", `v${newVersion}`]); 
-                await exec("git", ["push", "origin", `v${newVersion}`]); 
+                await exec("git", ["tag", `v${newVersionStr}`]); 
+                await exec("git", ["push", "origin", `v${newVersionStr}`]); 
             } catch (error: any) {
-                core.setFailed(`Failed tagging repository head with the new version ${newVersion} : ${error.message}`);
+                core.setFailed(`Failed tagging repository head with the new version ${newVersionStr} : ${error.message}`);
                 return
             }
         } catch(error: any) {
-            core.setFailed(`Get repo variable failed: ${error.message}`);
+            core.setFailed(`Action failed: ${error.message}`);
         }
 
+        // Cleanup
         try { 
             await octokit.request("DELETE /installation/token", {
                 headers: {
@@ -99,12 +238,18 @@ async function run(): Promise<void> {
                 }
             });
         } catch(error: any) {
-            core.setFailed(`Failed deleting the installation token: ${error.message}`);
+            core.warning(`Failed deleting the installation token: ${error.message}`);
         }
     } catch (error: any) {
         core.setFailed(`Action failed: ${error.message}`);
     }
+}
 
+function detectLanguage(): string {
+    if (fs.existsSync("package.json")) return "javascript";
+    if (fs.existsSync("__init__.py") || fs.existsSync("pyproject.toml")) return "python";
+    if (fs.existsSync("go.mod")) return "go";
+    return "generic";
 }
 
 run();

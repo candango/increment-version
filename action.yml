@@ -11,6 +11,25 @@ inputs:
     description: "Current version repository variable name containing the project version"
     required: true
     default: CURRENT_VERSION
+  language:
+    description: "Project language (python, javascript, go, auto)"
+    required: false
+    default: auto
+  file-path:
+    description: "Path to the version metadata file (__init__.py, package.json, etc.)"
+    required: false
+  increment-level:
+    description: "The level to increment (patch, minor, major)"
+    required: false
+    default: patch
+  is-prerelease:
+    description: "Whether the new version is a pre-release"
+    required: false
+    default: "false"
+  prerelease-type:
+    description: "The type of pre-release (a, b, rc)"
+    required: false
+    default: a
 runs:
   using: "node20"
   main: "dist/index.js"
