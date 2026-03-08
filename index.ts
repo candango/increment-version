@@ -68,6 +68,14 @@ class Version {
         return base;
     }
 
+    toSemVer(): string {
+        let base = `${this.major}.${this.minor}.${this.patch}`;
+        if (this.prerelease) {
+            base += `-${this.prerelease.type}.${this.prerelease.number}`;
+        }
+        return base;
+    }
+
     toPythonTuple(): string {
         return `(${this.major}, ${this.minor}, ${this.patch}${this.prerelease ? `, '${this.prerelease.type}${this.prerelease.number}'` : ""})`;
     }
@@ -90,6 +98,7 @@ class PythonProvider implements VersionProvider {
         content = content.replace(/version\s*=\s*["'][^"']+["']/, `version = "${newVersion.toString()}"`);
         fs.writeFileSync(target, content);
         core.info(`Updated Python metadata in ${target}`);
+        core.debug(`New content: ${content}`);
     }
 }
 
@@ -99,8 +108,9 @@ class JavaScriptProvider implements VersionProvider {
             core.warning("package.json not found. Skipping file update.");
             return;
         }
-        await exec("npm", ["version", newVersion.toString(), "--no-git-tag-version"]);
-        core.info(`Updated JavaScript metadata in package.json`);
+        // npm version requires standard SemVer
+        await exec("npm", ["version", newVersion.toSemVer(), "--no-git-tag-version"]);
+        core.info(`Updated JavaScript metadata in package.json using SemVer: ${newVersion.toSemVer()}`);
     }
 }
 
@@ -118,14 +128,12 @@ async function run(): Promise<void> {
         const owner: string =  process.env.GITHUB_REPOSITORY!.split("/")[0];
         const repo: string =  process.env.GITHUB_REPOSITORY!.split("/")[1];
 
-        // Auth Logic
         const githubToken: string = core.getInput("github-token");
         const appId: string = core.getInput("app-id");
         const privateKey: string = core.getInput("private-key");
 
         let authToken: string;
 
-        // PRECEDENCE FIX: Prioritize GitHub App if credentials are provided
         if (appId && privateKey) {
             core.info("Authenticating using GitHub App...");
             const auth = createAppAuth({ appId, privateKey });
@@ -143,7 +151,7 @@ async function run(): Promise<void> {
             authToken = githubToken;
             core.setSecret(authToken);
         } else {
-            core.setFailed("Authentication failed: No 'github-token' or 'app-id'/'private-key' provided. Please check your workflow configuration.");
+            core.setFailed("Authentication failed: No 'github-token' or 'app-id'/'private-key' provided.");
             return;
         }
 
