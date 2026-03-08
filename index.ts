@@ -125,12 +125,9 @@ async function run(): Promise<void> {
 
         let authToken: string;
 
-        if (githubToken) {
-            core.info("Using provided GitHub Token for authentication.");
-            authToken = githubToken;
-            core.setSecret(authToken);
-        } else if (appId && privateKey) {
-            core.info("Using GitHub App for authentication.");
+        // PRECEDENCE FIX: Prioritize GitHub App if credentials are provided
+        if (appId && privateKey) {
+            core.info("Authenticating using GitHub App...");
             const auth = createAppAuth({ appId, privateKey });
             const appOctokit = new Octokit({
                 authStrategy: createAppAuth,
@@ -141,8 +138,12 @@ async function run(): Promise<void> {
             const installationAuth = await auth({ type: "installation", installationId: installation.id });
             authToken = installationAuth.token;
             core.setSecret(authToken);
+        } else if (githubToken) {
+            core.info("Authenticating using provided GitHub Token...");
+            authToken = githubToken;
+            core.setSecret(authToken);
         } else {
-            core.setFailed("Either 'github-token' or both 'app-id' and 'private-key' must be provided.");
+            core.setFailed("Authentication failed: No 'github-token' or 'app-id'/'private-key' provided. Please check your workflow configuration.");
             return;
         }
 
@@ -159,17 +160,23 @@ async function run(): Promise<void> {
         const prereleaseType: string = core.getInput("prerelease-type");
 
         try { 
+            core.info(`Fetching current version from variable: ${currentVersionVar}`);
             const { data: repoVar } = await octokit.request("GET /repos/{owner}/{repo}/actions/variables/{name}", {
                 owner, repo, name: currentVersionVar,
                 headers: { "X-GitHub-Api-Version": "2022-11-28" }
             });
 
             const currentVersion = new Version(repoVar.value);
+            core.info(`Current version is: ${currentVersion.toString()}`);
+            
             currentVersion.increment(incrementLevel, isPrerelease, prereleaseType);
             const newVersionStr = currentVersion.toString();
+            core.info(`New version will be: ${newVersionStr}`);
 
             let provider: VersionProvider;
             const detectedLang = language === "auto" ? detectLanguage() : language;
+            core.info(`Detected language: ${detectedLang}`);
+
             switch (detectedLang) {
                 case "python": provider = new PythonProvider(); break;
                 case "javascript":
@@ -179,6 +186,7 @@ async function run(): Promise<void> {
 
             await provider.updateMetadata(currentVersion, filePath);
 
+            core.info(`Updating repository variable ${currentVersionVar} to ${newVersionStr}`);
             await octokit.request("PATCH /repos/{owner}/{repo}/actions/variables/{name}", {
                 owner, repo, name: currentVersionVar, value: newVersionStr,
                 headers: { "X-GitHub-Api-Version": "2022-11-28" }
@@ -187,16 +195,18 @@ async function run(): Promise<void> {
             core.setOutput("new-version", newVersionStr);
 
             try {
+                core.info(`Creating Git tag: v${newVersionStr}`);
                 await exec("git", ["tag", `v${newVersionStr}`]); 
                 const remoteRepo = `https://x-access-token:${authToken}@github.com/${owner}/${repo}.git`;
                 await exec("git", ["remote", "set-url", "origin", remoteRepo]);
                 await exec("git", ["push", "origin", `v${newVersionStr}`]); 
+                core.info("Git push successful.");
             } catch (error: any) {
                 core.setFailed(`Failed tagging repository head: ${error.message}`);
                 return;
             }
         } catch(error: any) {
-            core.setFailed(`Action failed: ${error.message}`);
+            core.setFailed(`Action failed during versioning logic: ${error.message}`);
         }
 
         if (appId && privateKey) {
@@ -209,7 +219,7 @@ async function run(): Promise<void> {
             }
         }
     } catch (error: any) {
-        core.setFailed(`Action failed: ${error.message}`);
+        core.setFailed(`Action failed during initialization: ${error.message}`);
     }
 }
 
