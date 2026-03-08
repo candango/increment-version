@@ -1,15 +1,22 @@
 name: Test increment version
 on: [push]
+
 jobs:
   test-python:
     runs-on: ubuntu-latest
     if: github.repository == 'candango/increment-version'
+    # Adding permissions to allow the default GITHUB_TOKEN to push tags if needed,
+    # although this job uses the GitHub App.
+    permissions:
+      contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
       - name: Create mock Python version file
         run: |
           echo '__version__ = (0, 0, 1)' > mock_init.py
-      - uses: ./
+      - name: Run Action (Local)
+        uses: ./
         with:
           app-id: ${{ vars.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
@@ -25,13 +32,18 @@ jobs:
   test-js:
     runs-on: ubuntu-latest
     if: github.repository == 'candango/increment-version'
+    permissions:
+      contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
-      - uses: ./
+      - name: Run Action (Local)
+        uses: ./
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           language: javascript
-          is-prerelease: false
+          is-prerelease: true
+          prerelease-type: b
       - name: Verify JS update
         run: |
           cat package.json | grep '"version":'
