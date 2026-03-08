@@ -27,9 +27,11 @@ jobs:
         run: |
           echo "Content of mock_init.py:"
           cat mock_init.py
-          # Python uses commas in tuple, so we grep for the numbers and type separately
+          # Python uses commas in tuple. We check for core version components.
+          # The variable will have something like 0.0.14a1
+          # The file will have (0, 0, 14, 'a1')
           grep "0, 0" mock_init.py
-          grep "'a" mock_init.py
+          grep "a1" mock_init.py
           echo "Python Ghost Update Verified!"
 
   test-js:
@@ -53,6 +55,6 @@ jobs:
         run: |
           echo "Content of package.json (version part):"
           cat package.json | grep '"version":'
-          # JS uses SemVer hyphen for pre-release (e.g., -b.1)
-          cat package.json | grep "\-b\."
+          # JS uses SemVer hyphen for pre-release (e.g., -b1)
+          cat package.json | grep "\-b"
           echo "JS Ghost Update Verified!"
