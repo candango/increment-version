@@ -2,6 +2,19 @@
 
 A GitHub Action that automates version incrementing for Continuous Integration (CI) workflows.
 
+## 🚀 Quick Start (Zero to Hero)
+
+1. **Initialize Version**: Go to **Settings > Secrets and variables > Actions > Variables** and create a repository variable `CURRENT_VERSION` with value `0.1.0`.
+2. **Choose Auth**:
+   - **Simple**: Use `github-token: ${{ secrets.GITHUB_TOKEN }}` in your workflow.
+   - **Secure**: Follow the [Setup Guide (GitHub App)](SETUP.md) for multi-repo support.
+3. **Add to Workflow**:
+```yaml
+- uses: candango/increment-version@v1
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }} # Or use App ID/Key
+```
+
 ## Features
 
 - **Automated Version Increment**: Automatically increments the patch version (X.Y.Z+1).
