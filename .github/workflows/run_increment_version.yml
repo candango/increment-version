@@ -2,15 +2,23 @@ name: Test increment version
 on: [push]
 
 jobs:
-  test-python:
+  test-matrix:
     runs-on: ubuntu-latest
     if: github.repository == 'candango/increment-version'
+    strategy:
+      fail-fast: false
+      max-parallel: 1 # Sequential to avoid TEST_VERSION variable race conditions
+      matrix:
+        language: [python, javascript]
+        auth_method: [app, token]
     permissions:
       contents: write
       actions: write
     steps:
       - uses: actions/checkout@v4
+      
       - name: Create mock Python version file
+        if: matrix.language == 'python'
         run: |
           cat <<EOF > mock_init.py
           __version__ = (0, 0, 1)
@@ -20,17 +28,23 @@ jobs:
                   return '.'.join(map(str, __version__[:-1])) + __version__[-1]
               return ".".join(map(str, __version__))
           EOF
-      - name: Run Action (Local - Python)
+
+      - name: Run Action (Matrix)
         id: increment
         uses: ./
         with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          language: python
-          file-path: mock_init.py
+          # Use App if auth_method is app, otherwise use PAT
+          github-token: ${{ matrix.auth_method == 'token' && secrets.TEST_PAT || '' }}
+          app-id: ${{ matrix.auth_method == 'app' && vars.APP_ID || '' }}
+          private-key: ${{ matrix.auth_method == 'app' && secrets.APP_PRIVATE_KEY || '' }}
+          language: ${{ matrix.language }}
+          file-path: ${{ matrix.language == 'python' && 'mock_init.py' || '' }}
+          current-version-variable: TEST_VERSION
           is-prerelease: true
-          prerelease-type: a
+          prerelease-type: ${{ matrix.language == 'python' && 'a' || 'b' }}
+
       - name: Verify Python update
+        if: matrix.language == 'python'
         run: |
           echo "Content of mock_init.py:"
           cat mock_init.py
@@ -42,42 +56,17 @@ jobs:
             echo "Version mismatch!"
             exit 1
           fi
-          echo "Python Ghost Update Verified via get_version()!"
-      - name: Cleanup Python Tag
-        if: always()
-        run: |
-          TAG="v${{ steps.increment.outputs.new-version }}"
-          if [ -n "$TAG" ] && [ "$TAG" != "v" ]; then
-            echo "Cleaning up tag $TAG..."
-            git tag -d "$TAG" || true
-            git push origin --delete "$TAG" || true
-          fi
+          echo "Python Ghost Update Verified!"
 
-  test-js:
-    needs: test-python
-    runs-on: ubuntu-latest
-    if: github.repository == 'candango/increment-version'
-    permissions:
-      contents: write
-      actions: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run Action (Local - JS)
-        id: increment
-        uses: ./
-        with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          language: javascript
-          is-prerelease: true
-          prerelease-type: b
       - name: Verify JS update
+        if: matrix.language == 'javascript'
         run: |
           NEW_VERSION="${{ steps.increment.outputs.new-version }}"
           echo "Verifying if $NEW_VERSION is in package.json..."
           cat package.json | grep "$NEW_VERSION"
           echo "JS Ghost Update Verified!"
-      - name: Cleanup JS Tag
+
+      - name: Cleanup Tag
         if: always()
         run: |
           TAG="v${{ steps.increment.outputs.new-version }}"

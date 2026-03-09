@@ -11,9 +11,10 @@ Best for multi-repository automation and high security.
    - Go to your organization or account **Settings > Developer settings > GitHub Apps**.
    - Click **New GitHub App**.
    - Set a name (e.g., `My-Versioning-Bot`) and a homepage URL (any URL will do).
-   - **Permissions**:
-     - `Repository permissions > Actions`: **Read and write** (to manage variables).
-     - `Repository permissions > Contents`: **Read and write** (to push tags).
+   - **Permissions (Repository permissions)**:
+     - **Actions**: `Read and write` (to manage variables).
+     - **Contents**: `Read and write` (to push tags and read repo data).
+     - **Variables**: `Read and write` (explicitly required for Repository Variables).
    - **Save** the app and note the **App ID**.
 2. **Generate Private Key**:
    - In the app settings, scroll down to **Private keys** and click **Generate a private key**.
@@ -28,11 +29,15 @@ Best for multi-repository automation and high security.
 ### Option B: The Quick Way (Direct Token)
 Best for quick prototyping or single-repo use.
 
-1. **Get a Token**:
-   - Use a **Personal Access Token (PAT)** with `contents:write` and `actions:write` permissions.
-   - Or use the default `secrets.GITHUB_TOKEN` (ensure your workflow has `permissions: contents: write` and `actions: write`).
+1. **Get a Token (PAT - Personal Access Token)**:
+   - Go to **Settings > Developer settings > Personal access tokens > Tokens (classic)**.
+   - Select the following scopes:
+     - **`repo`**: Full control of repositories (required for tags and variables).
+     - **`workflow`**: Required for actions that modify workflow runs.
+   - **Save** and copy the generated token immediately.
 2. **Configure Secret**:
-   - Add the token as a secret (e.g., `MY_GITHUB_TOKEN`).
+   - In your repository **Settings > Secrets and variables > Actions**, add the token as a secret (e.g., `MY_GITHUB_TOKEN`).
+3. **Important for Organization Repositories**: Ensure the PAT has access to the organization where the repository resides.
 
 ---
 
@@ -43,7 +48,7 @@ This action relies on a **GitHub Repository Variable** to track the current vers
 1. Go to your repository **Settings > Secrets and variables > Actions > Variables**.
 2. Click **New repository variable**.
 3. Name: `CURRENT_VERSION` (or your custom name).
-4. Value: `0.1.0` (your starting version).
+4. Value: `0.1.0` (your starting version). Use a SemVer compatible format (e.g., `0.0.1`, `1.0.0`) or PEP 440 for Python.
 
 ---
 
